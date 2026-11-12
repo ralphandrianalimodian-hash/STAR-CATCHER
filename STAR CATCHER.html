@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+<title>Star Catcher</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+margin:0;
+min-height:100vh;
+font-family:Arial,sans-serif;
+color:white;
+background:radial-gradient(circle at top,#243b70,#10152f 55%,#080b19);
+display:flex;
+justify-content:center;
+align-items:center;
+padding:18px;
+}
+
+.game{
+width:min(100%,430px);
+background:#141d3b;
+border:1px solid #52649b;
+border-radius:24px;
+padding:20px;
+text-align:center;
+}
+
+h1{
+margin:0;
+font-size:30px;
+color:#ffe27a;
+}
+
+.sub{
+color:#b8c7f2;
+margin:7px 0 16px;
+font-size:14px;
+}
+
+.stats{
+display:flex;
+justify-content:space-between;
+gap:8px;
+margin-bottom:12px;
+}
+
+.stat{
+flex:1;
+background:#202d55;
+padding:10px 5px;
+border-radius:12px;
+font-size:13px;
+}
+
+.stat b{
+display:block;
+font-size:21px;
+margin-top:3px;
+}
+
+#arena{
+height:390px;
+max-height:55vh;
+min-height:300px;
+position:relative;
+overflow:hidden;
+border:2px solid #6177b7;
+border-radius:17px;
+background:linear-gradient(#111a3b,#253c70);
+touch-action:none;
+}
+
+#arena:before{
+content:'✦       ·       ✧         ·     ✦';
+position:absolute;
+top:24px;
+left:0;
+width:100%;
+color:#c6d8ff;
+opacity:.65;
+letter-spacing:14px;
+font-size:16px;
+pointer-events:none;
+}
+
+#basket{
+position:absolute;
+bottom:18px;
+left:calc(50% - 34px);
+width:68px;
+height:30px;
+border-radius:7px 7px 18px 18px;
+background:linear-gradient(90deg,#ffb84d,#ffe58a);
+border:3px solid #fff0b8;
+box-shadow:0 0 18px #ffd45b;
+}
+
+.star{
+position:absolute;
+font-size:27px;
+line-height:1;
+color:#ffe36b;
+top:-35px;
+left:20px;
+pointer-events:none;
+}
+
+#message{
+position:absolute;
+inset:0;
+display:flex;
+align-items:center;
+justify-content:center;
+flex-direction:column;
+background:#08112acc;
+padding:20px;
+}
+
+#message strong{
+font-size:24px;
+color:#ffe27a;
+}
+
+#message span{
+margin-top:9px;
+line-height:1.5;
+font-size:14px;
+}
+
+button{
+border:0;
+border-radius:12px;
+padding:12px 20px;
+font-weight:bold;
+font-size:15px;
+cursor:pointer;
+}
+
+#start{
+margin-top:15px;
+background:#ffe27a;
+color:#1b2342;
+}
+
+.controls{
+display:flex;
+justify-content:center;
+gap:18px;
+margin-top:12px;
+}
+
+.move{
+width:90px;
+background:#293b70;
+color:white;
+border:1px solid #7187c4;
+font-size:22px;
+touch-action:none;
+}
+
+.hint{
+font-size:12px;
+color:#aebde8;
+margin:12px 0 0;
+}
+
+</style>
+</head>
+
+<body>
+
+<main class="game">
+
+<h1>⭐ STAR CATCHER</h1>
+
+<p class="sub">
+Catch the falling stars. Don't let them pass!
+</p>
+
+<div class="stats">
+
+<div class="stat">
+SCORE
+<b id="score">0</b>
+</div>
+
+<div class="stat">
+TIME
+<b id="time">30</b>
+</div>
+
+<div class="stat">
+BEST
+<b id="best">0</b>
+</div>
+
+</div>
+
+<div id="arena">
+
+<div id="basket"></div>
+
+<div id="message">
+<strong>Ready to play?</strong>
+<span>
+Move the basket and catch as many stars
+as you can in 30 seconds.
+</span>
+</div>
+
+</div>
+
+<button id="start">START GAME</button>
+
+<div class="controls">
+
+<button class="move" id="left">◀</button>
+
+<button class="move" id="right">▶</button>
+
+</div>
+
+<p class="hint">
+Hold the arrows to move. You can also use your keyboard.
+</p>
+<script>
+
+const arena=document.getElementById('arena');
+const basket=document.getElementById('basket');
+const scoreText=document.getElementById('score');
+const timeText=document.getElementById('time');
+const bestText=document.getElementById('best');
+const message=document.getElementById('message');
+const startBtn=document.getElementById('start');
+
+let score=0;
+let time=30;
+let playing=false;
+let basketX=0;
+let stars=[];
+let lastDrop=0;
+let lastTick=0;
+let frame=0;
+
+let best=Number(
+localStorage.getItem('starCatcherBest')||0
+);
+
+bestText.textContent=best;
+
+
+// MOVE BASKET
+
+function moveBasket(amount){
+
+if(!playing)return;
+
+basketX=Math.max(
+0,
+Math.min(
+arena.clientWidth-basket.offsetWidth,
+basketX+amount
+)
+);
+
+basket.style.left=basketX+'px';
+
+}
+
+
+// CREATE FALLING STARS
+
+function makeStar(){
+
+const el=document.createElement('div');
+
+el.className='star';
+el.textContent='★';
+
+const x=Math.random()*(arena.clientWidth-28);
+
+el.style.left=x+'px';
+
+arena.appendChild(el);
+
+stars.push({
+el,
+x,
+y:-30,
+speed:2+Math.random()*2.2
+});
+
+}
+
+
+// END GAME
+
+function endGame(){
+
+playing=false;
+
+stopHolding();
+
+stars.forEach(s=>s.el.remove());
+
+stars=[];
+
+if(score>best){
+
+best=score;
+
+localStorage.setItem('starCatcherBest',best);
+
+bestText.textContent=best;
+
+}
+
+message.style.display='flex';
+
+message.innerHTML=
+'<strong>TIME UP!</strong><span>Your score: '+
+score+
+'<br>Press START GAME to play again.</span>';
+
+startBtn.textContent='PLAY AGAIN';
+
+}
+
+
+// GAME LOOP
+
+function loop(now){
+
+if(!playing)return;
+
+const dt=Math.min(32,now-lastTick||16);
+
+lastTick=now;
+
+frame+=dt;
+
+if(now-lastDrop>650){
+
+makeStar();
+
+lastDrop=now;
+
+}
+
+const by=arena.clientHeight-48;
+
+const bx=basketX;
+
+const bw=basket.offsetWidth;
+
+stars=stars.filter(s=>{
+
+s.y+=s.speed*dt/16;
+
+s.el.style.top=s.y+'px';
+
+
+// COLLISION DETECTION
+
+if(
+s.y>by-15 &&
+s.y<by+25 &&
+s.x+24>bx &&
+s.x<bx+bw
+){
+
+s.el.remove();
+
+score++;
+
+scoreText.textContent=score;
+
+return false;
+
+}
+
+if(s.y>arena.clientHeight){
+
+s.el.remove();
+
+return false;
+
+}
+
+return true;
+
+});
+
+
+// TIMER
+
+if(frame>=1000){
+
+time--;
+
+timeText.textContent=time;
+
+frame=0;
+
+if(time<=0){
+
+endGame();
+
+return;
+
+}
+
+}
+
+requestAnimationFrame(loop);
+
+}
+
+
+// START GAME
+
+function startGame(){
+
+stopHolding();
+
+stars.forEach(s=>s.el.remove());
+
+stars=[];
+
+score=0;
+
+time=30;
+
+frame=0;
+
+lastDrop=0;
+
+lastTick=0;
+
+scoreText.textContent='0';
+
+timeText.textContent='30';
+
+basketX=(arena.clientWidth-basket.offsetWidth)/2;
+
+basket.style.left=basketX+'px';
+
+message.style.display='none';
+
+startBtn.textContent='RESTART';
+
+playing=true;
+
+requestAnimationFrame(loop);
+
+}
+
+startBtn.addEventListener('click',startGame);
+
+
+// KEYBOARD CONTROLS
+
+document.addEventListener('keydown',e=>{
+
+if(e.key==='ArrowLeft')moveBasket(-25);
+
+if(e.key==='ArrowRight')moveBasket(25);
+
+});
+
+
+// LONG PRESS CONTROLS
+
+let holdTimer=null;
+
+function stopHolding(){
+
+if(holdTimer!==null){
+
+clearInterval(holdTimer);
+
+holdTimer=null;
+
+}
+
+}
+
+function setupHoldButton(id,direction){
+
+const button=document.getElementById(id);
+
+button.addEventListener('pointerdown',e=>{
+
+e.preventDefault();
+
+stopHolding();
+
+moveBasket(direction*7);
+
+holdTimer=setInterval(()=>{
+
+moveBasket(direction*7);
+
+},16);
+
+if(button.setPointerCapture){
+
+button.setPointerCapture(e.pointerId);
+
+}
+
+});
+
+button.addEventListener('pointerup',stopHolding);
+
+button.addEventListener('pointercancel',stopHolding);
+
+button.addEventListener('lostpointercapture',stopHolding);
+
+button.addEventListener('contextmenu',e=>{
+
+e.preventDefault();
+
+});
+
+}
+
+setupHoldButton('left',-1);
+
+setupHoldButton('right',1);
+
+window.addEventListener('pointerup',stopHolding);
+
+window.addEventListener('blur',stopHolding);
+
+
+// TOUCH AND DRAG CONTROLS
+
+arena.addEventListener('pointerdown',e=>{
+
+if(!playing)return;
+
+const r=arena.getBoundingClientRect();
+
+basketX=Math.max(
+0,
+Math.min(
+arena.clientWidth-basket.offsetWidth,
+e.clientX-r.left-basket.offsetWidth/2
+)
+);
+
+basket.style.left=basketX+'px';
+
+});
+
+arena.addEventListener('pointermove',e=>{
+
+if(!playing||e.buttons===0)return;
+
+const r=arena.getBoundingClientRect();
+
+basketX=Math.max(
+0,
+Math.min(
+arena.clientWidth-basket.offsetWidth,
+e.clientX-r.left-basket.offsetWidth/2
+)
+);
+
+basket.style.left=basketX+'px';
+
+});
+
+</script>
+
+</body>
+</html>
